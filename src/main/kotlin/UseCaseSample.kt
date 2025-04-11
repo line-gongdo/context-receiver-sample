@@ -3,7 +3,7 @@ package org.example
 class AcceptOrderUseCaseSample {
     fun run() {
         val logger = ConsoleLogger()
-        val orderRepository = MemoryOrderRepository()
+        val orderRepository = MemoryOrderFindOrderService()
         //val orderRepository = StubOrderRepository()
         val publisher = MemoryPublisher()
 
@@ -15,7 +15,7 @@ class AcceptOrderUseCaseSample {
         with(logger) {
             with(orderRepository) {
                 with(publisher) {
-                    ContextAcceptOrderUseCase().execute("orderId")
+                    ContextAcceptOrderUseCase().acceptByOrderId("orderId")
                 }
             }
         }
@@ -23,17 +23,28 @@ class AcceptOrderUseCaseSample {
         // context(logger, orderRepository, publisher) {
         //     ContextAcceptOrderUseCase().execute("orderId")
         // }
+
+        // currently, it sucks in many ways
+//        with(logger) {
+//            with(orderRepository) {
+//                with(publisher) {
+//                    with(StubPickupCodeService()) {
+//                        ContextAcceptOrderUseCase().acceptByPickupCode("pickupCode")
+//                    }
+//                }
+//            }
+//        }
     }
 }
 
-data class Order(val id: String, val status: String)
+data class Order(val id: String, val pickupCode: String, val status: String)
 data class OrderAcceptedEvent(val order: Order)
 
-interface Repository<T> {
+interface FindOrderService<T> {
     fun findById(id: String): T?
 }
 
-class MemoryOrderRepository : Repository<Order> {
+class MemoryOrderFindOrderService : FindOrderService<Order> {
     private val orders = mutableMapOf<String, Order>()
 
     override fun findById(id: String): Order? {
@@ -41,9 +52,20 @@ class MemoryOrderRepository : Repository<Order> {
     }
 }
 
-class StubOrderRepository : Repository<Order> {
+interface PickupCodeService {
+    fun findOrderId(pickupCode: String): String
+}
+
+class StubPickupCodeService : PickupCodeService {
+    override fun findOrderId(pickupCode: String): String {
+        return "orderId"
+    }
+}
+
+class StubOrderFindOrderService : FindOrderService<Order> {
     override fun findById(id: String) = Order(
         id = id,
+        pickupCode = "pickupCode",
         status = "PENDING",
     )
 }
@@ -62,11 +84,11 @@ class MemoryPublisher : Publisher<OrderAcceptedEvent> {
 
 class ClassicAcceptOrderUseCase(
     private val logger: Logger,
-    private val repository: Repository<Order>,
+    private val findOrderService: FindOrderService<Order>,
     private val publisher: Publisher<OrderAcceptedEvent>,
 ) {
     fun execute(orderId: String) {
-        val order = repository.findById(orderId)
+        val order = findOrderService.findById(orderId)
         if (order == null) {
             logger.error("Order not found: $orderId")
             return
@@ -85,9 +107,9 @@ class ClassicAcceptOrderUseCase(
 
 class ContextAcceptOrderUseCase {
     // with `Context Parameters` feature, we can use named parameters
-    // context(Logger, Repository<Order>, Publisher<OrderAcceptedEvent>)
-    context(Logger, Repository<Order>, Publisher<OrderAcceptedEvent>)
-    fun execute(orderId: String) {
+    // context(logger: Logger, repository: Repository<Order>, publisher: Publisher<OrderAcceptedEvent>)
+    context(Logger, FindOrderService<Order>, Publisher<OrderAcceptedEvent>)
+    fun acceptByOrderId(orderId: String) {
         val order = findById(orderId)
         if (order == null) {
             error("Order not found: $orderId")
@@ -102,5 +124,11 @@ class ContextAcceptOrderUseCase {
         val updatedOrder = order.copy(status = "ACCEPTED")
         publish(OrderAcceptedEvent(updatedOrder))
         info("Order accepted: $updatedOrder")
+    }
+
+    context(Logger, FindOrderService<Order>, Publisher<OrderAcceptedEvent>, PickupCodeService)
+    fun acceptByPickupCode(pickupCode: String) {
+        val orderId = findOrderId(pickupCode)
+        acceptByOrderId(orderId)
     }
 }
