@@ -4,6 +4,7 @@ class AcceptOrderUseCaseSample {
     fun run() {
         val logger = ConsoleLogger()
         val orderRepository = MemoryOrderRepository()
+        //val orderRepository = StubOrderRepository()
         val publisher = MemoryPublisher()
 
         // Classic style
@@ -38,6 +39,13 @@ class MemoryOrderRepository : Repository<Order> {
     override fun findById(id: String): Order? {
         return orders[id]
     }
+}
+
+class StubOrderRepository : Repository<Order> {
+    override fun findById(id: String) = Order(
+        id = id,
+        status = "PENDING",
+    )
 }
 
 interface Publisher<T> {
